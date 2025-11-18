@@ -36,9 +36,9 @@ export class GameEngine {
     buildMode: EntityType | null = null;
     
     // Production
-    productionQueues: Record<string, { type: EntityType, progress: number, total: number } | null> = {
-        barracks: null,
-        factory: null
+    productionQueues: Record<string, Array<{ type: EntityType, progress: number, total: number }>> = {
+        barracks: [],
+        factory: []
     };
 
     // Callback to update React UI
@@ -331,16 +331,17 @@ export class GameEngine {
         // 1. Production
         if (this.power >= 0) {
             Object.entries(this.productionQueues).forEach(([key, queue]) => {
-                if (queue) {
-                    queue.progress += 16;
-                    if (queue.progress >= queue.total) {
+                if (queue.length > 0) {
+                    const currentItem = queue[0];
+                    currentItem.progress += 16;
+                    if (currentItem.progress >= currentItem.total) {
                         const spawnerType = key === 'barracks' ? EntityType.BARRACKS : EntityType.FACTORY;
                         const spawner = this.buildings.find(b => b.type === spawnerType && b.team === 'player');
                         if (spawner) {
-                            this.units.push(this.createEntity(spawner.pos.x, spawner.pos.y + 50, queue.type, 'player'));
+                            this.units.push(this.createEntity(spawner.pos.x, spawner.pos.y + 50, currentItem.type, 'player'));
                             this.onMessage?.("Unit Ready");
                         }
-                        this.productionQueues[key] = null;
+                        queue.shift(); // Remove completed item from queue
                         this.onUpdateUI?.();
                     } else if (this.tick % 10 === 0) {
                         this.onUpdateUI?.(); // Update progress bars

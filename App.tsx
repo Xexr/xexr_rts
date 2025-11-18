@@ -44,6 +44,7 @@ export default function App() {
   const [messages, setMessages] = useState<string[]>([]);
   const [gameOver, setGameOver] = useState(false);
   const [production, setProduction] = useState({ barracks: 0, factory: 0 });
+  const [queueCounts, setQueueCounts] = useState({ barracks: 0, factory: 0 });
   const [hasBuildings, setHasBuildings] = useState({ barracks: false, factory: false });
   
   // Sidebar State
@@ -70,12 +71,16 @@ export default function App() {
             factory: engine.buildings.some(b => b.type === EntityType.FACTORY && b.team === 'player')
         });
         
-        // Calc progress %
+        // Calc progress % and queue counts
         const bQueue = engine.productionQueues.barracks;
         const fQueue = engine.productionQueues.factory;
         setProduction({
-            barracks: bQueue ? (bQueue.progress / bQueue.total) * 100 : 0,
-            factory: fQueue ? (fQueue.progress / fQueue.total) * 100 : 0
+            barracks: bQueue.length > 0 ? (bQueue[0].progress / bQueue[0].total) * 100 : 0,
+            factory: fQueue.length > 0 ? (fQueue[0].progress / fQueue[0].total) * 100 : 0
+        });
+        setQueueCounts({
+            barracks: bQueue.length,
+            factory: fQueue.length
         });
       };
       
@@ -111,8 +116,10 @@ export default function App() {
         gameRef.current.onMessage?.("Insufficient Funds");
         return;
     }
-    if (gameRef.current.productionQueues[buildingKey]) {
-        gameRef.current.onMessage?.("Production Busy");
+    
+    const queue = gameRef.current.productionQueues[buildingKey];
+    if (queue.length >= 100) {
+        gameRef.current.onMessage?.("Queue Full (Max 100)");
         return;
     }
     
@@ -123,11 +130,12 @@ export default function App() {
     }
 
     gameRef.current.credits -= def.cost;
-    gameRef.current.productionQueues[buildingKey] = {
+    queue.push({
         type: type,
         progress: 0,
         total: def.buildTime || 1000
-    };
+    });
+    gameRef.current.onUpdateUI?.();
   };
 
   const consultEVA = useCallback(async () => {
@@ -304,6 +312,7 @@ export default function App() {
                                 label="Rifleman"
                                 cost={DEFINITIONS[EntityType.INFANTRY].cost}
                                 progress={production.barracks}
+                                queueCount={queueCounts.barracks}
                                 disabled={!hasBuildings.barracks}
                                 onClick={() => queueUnit(EntityType.INFANTRY, 'barracks')}
                             />
@@ -311,6 +320,7 @@ export default function App() {
                                 label="Tank"
                                 cost={DEFINITIONS[EntityType.TANK].cost}
                                 progress={production.factory}
+                                queueCount={queueCounts.factory}
                                 disabled={!hasBuildings.factory}
                                 onClick={() => queueUnit(EntityType.TANK, 'factory')}
                             />
@@ -318,6 +328,7 @@ export default function App() {
                                 label="Harvester"
                                 cost={DEFINITIONS[EntityType.HARVESTER].cost}
                                 progress={production.factory}
+                                queueCount={queueCounts.factory}
                                 disabled={!hasBuildings.factory}
                                 onClick={() => queueUnit(EntityType.HARVESTER, 'factory')}
                             />
@@ -367,10 +378,10 @@ const BuildBtn = ({ label, cost, icon, active, onClick }: any) => (
     </button>
 );
 
-const UnitBtn = ({ label, cost, progress, disabled, onClick }: any) => (
+const UnitBtn = ({ label, cost, progress, queueCount, disabled, onClick }: any) => (
     <button 
         onClick={onClick}
-        disabled={progress > 0 || disabled}
+        disabled={disabled}
         className={`relative flex items-center justify-between p-3 border rounded transition-all overflow-hidden group ${disabled ? 'bg-gray-900 border-gray-800 opacity-50 cursor-not-allowed' : 'bg-gray-800 border-gray-600 hover:bg-gray-700'}`}
     >
         {/* Progress Bar Background */}
@@ -381,7 +392,7 @@ const UnitBtn = ({ label, cost, progress, disabled, onClick }: any) => (
             <span className={`text-xs ${disabled ? 'text-gray-700' : 'text-yellow-500'}`}>${cost}</span>
         </div>
         
-        {progress > 0 && <div className="relative z-10 text-xs text-green-400 font-mono">{Math.round(progress)}%</div>}
-        {disabled && !progress && <div className="relative z-10 text-xs text-red-900 font-mono">LOCKED</div>}
+        {queueCount > 0 && <div className="relative z-10 text-xs text-green-400 font-mono">Queue: {queueCount}</div>}
+        {disabled && !queueCount && <div className="relative z-10 text-xs text-red-900 font-mono">LOCKED</div>}
     </button>
 );
